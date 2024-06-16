@@ -9,7 +9,8 @@ from rich.table import Table
 
 app_id = 2923300
 currency = 1 # https://partner.steamgames.com/doc/store/pricing/currencies To get currencies number.
-steam_id = 0
+steam_id = 76561198975319605
+file_name = "data.json"
 
 def scrap_inventory():
     data = {
@@ -70,34 +71,34 @@ def render():
         r = r.json()
 
         result.extend(r["results"])
-        if len(r["results"]) < 100:
+        if len(r["results"]) <= 100:
             break
 
     return result
 
 def load_data():
     try:
-        with open("data.json", encoding="utf-8") as fo:
+        with open(file_name, encoding="utf-8") as fo:
             return json.load(fo)
     except (FileNotFoundError, json.decoder.JSONDecodeError):
         return []
 
 def save_data(data):
-    with open("data.json", "w", encoding="utf-8") as fo:
+    with open(file_name, "w", encoding="utf-8") as fo:
         json.dump(data, fo, indent=4, ensure_ascii=False)
 
 def print_prices(data, inventory=False):
     table = Table()
 
-    table.add_column("🚧")
-    table.add_column("💰")
-    table.add_column("🔊")
-    table.add_column("〽️")
-    table.add_column("🚩")
-    table.add_column("🆓")
-    if inventory: table.add_column("📄")
-    if inventory: table.add_column("🏦")
-    table.add_column("🔗")
+    table.add_column("🚧 Item")
+    table.add_column("💲 Price")
+    table.add_column("🔊 Volume")
+    table.add_column("〽️ ")
+    table.add_column("🚩 ")
+    table.add_column("🆓 ")
+    if inventory: table.add_column("🎒 Inv")
+    if inventory: table.add_column("💰 Total Price")
+    table.add_column("🔗 URL")
 
     total_price = 0
 
@@ -109,17 +110,17 @@ def print_prices(data, inventory=False):
 
         if diff == 0:
             price_changed = 0
-            emoji = "🚩"
+            emoji = "  "
             style = Style(color="white")
 
         elif diff < 0:
             price_changed = abs(diff/100)
-            emoji = "⬇️"
+            emoji = "⬇️ "
             style = Style(color="red")
 
         elif diff > 0:
             price_changed = abs(diff/100)
-            emoji = "⬆️"
+            emoji = "⬆️ "
             style = Style(color="green")
 
         url = f"https://steamcommunity.com/market/listings/{app_id}/{item["asset_description"]["market_hash_name"]}"
@@ -135,8 +136,10 @@ def print_prices(data, inventory=False):
     if inventory:
         console.print(f"[green]Total Price: {total_price}")
 
-def add_volume(data, use_cache=False):
+def add_volume(data, table, use_cache=False):
     old_data = load_data()
+
+    table.add_column("🔊 Volume")
 
     if old_data and use_cache:
         for item in data:
@@ -233,7 +236,7 @@ def main():
 
     if steam_id:
         data = add_inventory(data)
-
+        data.sort(key=lambda x: x["amount"], reverse=True)
         print_prices(data, True)
     else:
         print_prices(data)
