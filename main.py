@@ -5,11 +5,12 @@ import time
 import urllib
 
 import requests
-from rich import print
+from rich import box, print
 from rich.console import Console
 from rich.progress import track
 from rich.style import Style
 from rich.table import Table
+from rich.text import Text
 
 
 class Market:
@@ -49,18 +50,14 @@ class Market:
         for item in track(data, description="💲 [green bold]Requesting prices...  "):
             order_histogram = self.get_orders_histogram(item["item_id"])
 
-            item["sell_order_count"] = int(order_histogram["sell_order_count"].replace(",", ""))
-            item["buy_order_count"] = int(order_histogram["buy_order_count"].replace(",", ""))
+            if order_histogram.get("buy_order_count", 0) != 0:
+                item["buy_order_count"] = int(re.sub(r"\D", "", order_histogram["buy_order_count"]))
 
-            if order_histogram.get("lowest_sell_order"):
-                item["lowest_sell_order"] = int(order_histogram["lowest_sell_order"])
-            else:
-                item["lowest_sell_order"] = None
+            if order_histogram.get("sell_order_count", 0) != 0:
+                item["sell_order_count"] = int(re.sub(r"\D", "", order_histogram["sell_order_count"]))
 
-            if order_histogram.get("highest_buy_order"):
-                item["highest_buy_order"] = int(order_histogram["highest_buy_order"])
-            else:
-                item["highest_buy_order"] = None
+            item["highest_buy_order"] = int(order_histogram["highest_buy_order"]) if order_histogram.get("highest_buy_order") else -1
+            item["lowest_sell_order"] = int(order_histogram["lowest_sell_order"]) if order_histogram.get("lowest_sell_order") else -1
 
             self.currency_symbol = order_histogram["price_suffix"]
 
@@ -151,21 +148,6 @@ class Market:
 
         return r.json()
 
-    def price_overview(self, hash_name):
-        while True:
-            data = {
-                "appid": self.app_id,
-                "currency": self.currency,
-                "market_hash_name": hash_name,
-            }
-
-            r = requests.get("https://steamcommunity.com/market/priceoverview/", params=data)
-            if r.status_code == 429:
-                time.sleep(5)
-                continue
-
-            return r.json()
-
     def load_items(self, file_name):
         try:
             with open(file_name, encoding="utf-8") as fo:
@@ -206,20 +188,20 @@ class Market:
         return result
 
 def print_prices(data, steam_id=None, currency_symbol="$"):
-    table = Table(padding=(0))
+    table = Table(padding=(0), style="yellow")
 
-    table.add_column("🚧 Item")
-    table.add_column("💲 Buy")
-    table.add_column("💲 Sell")
+    table.add_column("🚧 [bold white]Item")
+    table.add_column("💲 [bold green]Buy")
+    table.add_column("💲 [bold red]Sell")
     table.add_column("📈 ")
     table.add_column("🚩 ")
     table.add_column("🆓 ")
 
     if steam_id:
-        table.add_column("🎒 Inv")
-        table.add_column("💰 Total Price")
+        table.add_column("🎒 [bold blue]Inv")
+        table.add_column("💰 [bold green]Total Price")
 
-    table.add_column("🔗 URL")
+    # table.add_column("🔗 URL", style="dim")
 
     total_price = 0
 
@@ -236,30 +218,26 @@ def print_prices(data, steam_id=None, currency_symbol="$"):
 
         elif diff < 0:
             price_changed = abs(diff/100)
-            emoji = "⬇️"
+            emoji = "👎"
             style = Style(color="red")
 
         elif diff > 0:
             price_changed = abs(diff/100)
-            emoji = "⬆️"
+            emoji = "👍"
             style = Style(color="green")
 
         if not item.get("highest_buy_order"):
             item["highest_buy_order"] = "❌"
 
-        if item.get("drop_in_game"):
-            item["drop_in_game"] = "✅"
-        else:
-            item["drop_in_game"] = "❌"
+        drops_in_game = "✅" if item.get("drops_in_game") else "❌"
 
         row_items = [
-            f"[bold]{item["name"]}[/bold]",
+            f"[bold][link={item["url"]}]{item["name"]}[/link][/bold]",
             str(item["highest_buy_order"] / 100),
             str(item["lowest_sell_order"] / 100),
             str(price_changed),
             emoji,
-            item["drop_in_game"],
-            item["url"],
+            drops_in_game,
         ]
 
         if steam_id:
@@ -278,11 +256,11 @@ def print_prices(data, steam_id=None, currency_symbol="$"):
 def add_drop_in_game(data):
     for item in data:
         for desc in item["descriptions"]:
-            if "Drops ingame" in desc or "Drops from the game" in desc:
-                item["drop_in_game"] = True
+            if "Drops ingame" in desc["value"] or "Drops from the game" in desc["value"]:
+                item["drops_in_game"] = True
                 break
 
-            item["drop_in_game"] = False
+            item["drops_in_game"] = False
 
     return data
 
@@ -329,9 +307,9 @@ def save_data(folder, app_id, data):
         json.dump(data, fo, indent=4, ensure_ascii=False)
 
 def main():
-    app_id = 2977660 # 2923300 (BANANA) 2784840 (EGG) 2977660 (CATS)
-    currency = 18 # https://partner.steamgames.com/doc/store/pricing/currencies To get currencies number.
-    steam_id = 76561198975319605 # https://steamcommunity.com/profiles/76561198975319605/
+    app_id = 2923300 # 2923300 (BANANA) 2784840 (EGG) 2977660 (CATS)
+    currency = 3 # https://partner.steamgames.com/doc/store/pricing/currencies To get currencies number.
+    steam_id = "76561198047167723" # Put there STEAMID
     folder = "data"
 
     scraper = Market(app_id, currency, steam_id)
